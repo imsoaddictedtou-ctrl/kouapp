@@ -292,10 +292,13 @@ def get_dividends(code: str) -> list[dict]:
                         return i
             return None
 
-        total_idx   = _find_col(["合計"])
-        yield_idx   = _find_col(["利回り"])
-        interim_idx = _find_col(["中間"])
-        yearend_idx = _find_col(["期末", "年末"])
+        # 分割調整列を優先（株式分割があっても一貫したトレンドを表示するため）
+        # 分割調整列がなければ合計列にフォールバック
+        adjusted_idx = _find_col(["分割調整"])
+        total_idx    = adjusted_idx if adjusted_idx is not None else _find_col(["合計"])
+        yield_idx    = _find_col(["利回り"])
+        interim_idx  = _find_col(["中間"])
+        yearend_idx  = _find_col(["期末", "年末"])
 
         rows = table.find_all("tr")
         for row in rows[1:]:
