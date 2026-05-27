@@ -277,20 +277,44 @@ def get_dividends(code: str) -> list[dict]:
     dividends = []
     for table in soup.find_all("table"):
         headers = [th.get_text(strip=True) for th in table.find_all("th")]
-        if "合計" in headers or "中間" in headers:
-            rows = table.find_all("tr")
-            for row in rows[1:]:
-                cells = [td.get_text(strip=True) for td in row.find_all("td")]
-                if len(cells) >= 5:
-                    dividends.append({
-                        "year": cells[0] if cells[0] else "不明",
-                        "type": cells[1] if len(cells) > 1 else "不明",
-                        "interim": cells[2] if len(cells) > 2 else "不明",
-                        "yearend": cells[3] if len(cells) > 3 else "不明",
-                        "total": cells[4] if len(cells) > 4 else "不明",
-                        "yield": cells[6] if len(cells) > 6 else "不明",
-                    })
-            break
+        if "合計" not in headers and "中間" not in headers:
+            continue
+
+        # 動的に列インデックスを解決（四半期配当など列数が異なる企業に対応）
+        def _find_col(keywords: list[str]) -> int | None:
+            for kw in keywords:
+                for i, h in enumerate(headers):
+                    if h == kw:          # 完全一致優先
+                        return i
+            for kw in keywords:
+                for i, h in enumerate(headers):
+                    if kw in h:          # 部分一致フォールバック
+                        return i
+            return None
+
+        total_idx   = _find_col(["合計"])
+        yield_idx   = _find_col(["利回り"])
+        interim_idx = _find_col(["中間"])
+        yearend_idx = _find_col(["期末", "年末"])
+
+        rows = table.find_all("tr")
+        for row in rows[1:]:
+            cells = [td.get_text(strip=True) for td in row.find_all("td")]
+            if len(cells) < 3:
+                continue
+
+            def _cell(idx: int | None) -> str:
+                return cells[idx] if idx is not None and idx < len(cells) else "不明"
+
+            dividends.append({
+                "year":    cells[0] if cells[0] else "不明",
+                "type":    cells[1] if len(cells) > 1 else "不明",
+                "interim": _cell(interim_idx),
+                "yearend": _cell(yearend_idx),
+                "total":   _cell(total_idx),
+                "yield":   _cell(yield_idx),
+            })
+        break
     return dividends
 
 
