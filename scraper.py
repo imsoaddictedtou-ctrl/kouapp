@@ -268,6 +268,56 @@ def get_results(code: str) -> list[dict]:
     return results
 
 
+def get_dividends_from_results(code: str) -> list[dict]:
+    """業績ページの一株配当列から配当金推移を取得する（株式分割調整済み）。"""
+    soup = _get(f"{BASE_URL}/{code}/results")
+    if soup is None:
+        return []
+
+    dividends = []
+    for table in soup.find_all("table"):
+        raw_headers = [th.get_text(strip=True) for th in table.find_all("th")]
+        half = len(raw_headers) // 2
+        headers = raw_headers[:half] if half and raw_headers[:half] == raw_headers[half:] else raw_headers
+
+        if "一株配当" not in headers:
+            continue
+
+        def _find_col(keywords: list[str]) -> int | None:
+            for kw in keywords:
+                for i, h in enumerate(headers):
+                    if h == kw:
+                        return i
+            for kw in keywords:
+                for i, h in enumerate(headers):
+                    if kw in h:
+                        return i
+            return None
+
+        total_idx = _find_col(["一株配当"])
+
+        rows = table.find_all("tr")
+        for row in rows[1:]:
+            cells = [td.get_text(strip=True) for td in row.find_all("td")]
+            if len(cells) < 2:
+                continue
+
+            total = cells[total_idx] if total_idx is not None and total_idx < len(cells) else "不明"
+            if not total or total in ("-", ""):
+                total = "不明"
+
+            dividends.append({
+                "year":    cells[0] if cells[0] else "不明",
+                "type":    "本決算",
+                "interim": "不明",
+                "yearend": "不明",
+                "total":   total,
+                "yield":   "不明",
+            })
+        break
+    return dividends
+
+
 def get_dividends(code: str) -> list[dict]:
     """過去の配当金履歴を取得する。"""
     soup = _get(f"{BASE_URL}/{code}/dividend")
@@ -379,7 +429,10 @@ def scrape_all(query: str) -> dict:
     time.sleep(0.5)
     results = get_results(code)
     time.sleep(0.5)
-    dividends = get_dividends(code)
+    # 業績ページの一株配当を優先（株式分割調整済みで正確）
+    dividends = get_dividends_from_results(code)
+    if not dividends:
+        dividends = get_dividends(code)
     time.sleep(0.3)
     sector_info = get_sector(code)
 
