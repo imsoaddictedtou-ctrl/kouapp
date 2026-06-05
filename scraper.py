@@ -72,17 +72,51 @@ def _get(url: str) -> BeautifulSoup | None:
 
 
 def get_sector(code: str) -> dict:
-    """Yahoo Finance profileページから業種分類を取得する。"""
-    soup = _get(f"https://finance.yahoo.co.jp/quote/{code}/profile")
-    if soup is None:
-        return {"sector": "不明", "sector_type": "不明"}
+    """株探→minkabu→Yahoo Financeの順に業種分類を取得する。"""
 
     sector = "不明"
-    tags = soup.find_all(True)
-    for i, tag in enumerate(tags):
-        if tag.get_text(strip=True) == "業種分類" and i + 1 < len(tags):
-            sector = tags[i + 1].get_text(strip=True)
-            break
+    _INVALID_WORDS = {"テーマ", "業種", "セクター", "ランキング", "注目", "人気"}
+
+    # ── 方法①: 株探（kabutan.jp）──────────────────────
+    soup = _get(f"https://kabutan.jp/stock/?code={code}")
+    if soup:
+        page_text = soup.get_text()
+        if "REIT" in page_text or "不動産投資信託" in page_text:
+            sector = "不動産投資信託"
+        if sector == "不明":
+            idx = page_text.find("業種")
+            if idx >= 0:
+                candidate = page_text[idx + 2: idx + 25].strip().split("\n")[0].strip()
+                if (candidate and len(candidate) < 20
+                        and candidate not in _INVALID_WORDS
+                        and not any(w in candidate for w in _INVALID_WORDS)):
+                    sector = candidate
+
+    # ── 方法②: minkabu（フォールバック）────────────────────
+    if sector == "不明":
+        soup2 = _get(f"https://minkabu.jp/stock/{code}")
+        if soup2:
+            import re as _re
+            text2 = soup2.get_text()
+            m = _re.search(r'業種[^\n]{0,5}\n([^\n]{1,20})', text2)
+            if m:
+                candidate = m.group(1).strip()
+                if candidate and candidate not in _INVALID_WORDS:
+                    sector = candidate
+
+    # ── 方法③: Yahoo Finance（最終フォールバック）─────────
+    if sector == "不明":
+        soup3 = _get(f"https://finance.yahoo.co.jp/quote/{code}/profile")
+        if soup3:
+            tags = soup3.find_all(True)
+            for i, tag in enumerate(tags):
+                if tag.get_text(strip=True) in ("業種分類", "業種"):
+                    for j in range(i + 1, min(i + 10, len(tags))):
+                        candidate = tags[j].get_text(strip=True)
+                        if candidate and len(candidate) < 30 and candidate not in ("業種分類", "業種"):
+                            sector = candidate
+                            break
+                    break
 
     # 完全一致 → 部分一致でフォールバック
     sector_type = _SECTOR_TYPE.get(sector)
