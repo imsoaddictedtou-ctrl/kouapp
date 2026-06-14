@@ -161,11 +161,11 @@ def make_dividend_chart(data_list: list[dict]) -> go.Figure:
     """配当金（棒・左軸）＋配当性向（折れ線・右軸）の2軸グラフ。"""
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-    # 全社の配当年度を収集してソート（x軸共通順）
+    # 全社の配当年度を収集してソート（x軸共通順）— 無配年（0円）も含める
     all_years: set[str] = set()
     for d in data_list:
         for dv in d.get("dividends", []):
-            if dv.get("total_val") is not None:
+            if dv.get("year"):
                 all_years.add(dv["year"])
     category_order = sorted(all_years, key=lambda x: x.replace("予", "").replace("（予）", ""))
 
@@ -173,9 +173,10 @@ def make_dividend_chart(data_list: list[dict]) -> go.Figure:
         color = COLORS[i % len(COLORS)]
         name = d["company_name"]
 
-        # ── 配当金（棒グラフ・左軸）──
+        # ── 配当金（棒グラフ・左軸）— total_val=Noneの無配年は0として表示 ──
         div_pairs = sorted(
-            [(dv["year"], dv["total_val"]) for dv in d.get("dividends", []) if dv.get("total_val") is not None],
+            [(dv["year"], dv["total_val"] if dv.get("total_val") is not None else 0)
+             for dv in d.get("dividends", []) if dv.get("year")],
             key=lambda x: x[0].replace("予", "").replace("（予）", ""),
         )
         if div_pairs:
@@ -667,12 +668,11 @@ if st.session_state.data_list:
     st.markdown("---")
     with st.expander("📖 用語解説（初心者向け）"):
         st.markdown("""
-| 用語 | ひとことで言うと | 見方のポイント |
+| 用語 | ひとことで言うと | 見方ボイント |
 |---|---|---|
-| **PER**（株価収益率） | 「株価が利益の何年分か」を示す指標。割高・割安の目安。 | 低いほど割安。15倍以下が目安。ただし業種により差がある。 |
-| **PBR**（株価純資産倍率） | 「株価が会社の資産の何倍か」を示す指標。 | 1倍割れは理論上、解散しても株主に利益が出る状態。1倍前後が割安の目安。 |
-| **ROE**（自己資本利益率） | 「株主から預かったお金をどれだけ効率よく増やせたか」。 | 8〜10%以上あると優良企業の目安。高いほど経営効率が良い。 |
-| **自己資本比率** | 「会社の資産のうち、借金ではなく自分のお金の割合」。 | 40%以上で財務安定の目安。高いほど倒産リスクが低い。 |
+| **PER**（株価収益率） | 「株価が利益の何年分か」を示す指標。割高・割安の目安。 | 低いほど割安。15倍以下が目安。ただし業種によらm��c8�`���� ��
+�������"9�*�/�y�%:,���(�`#y���"H8�#9�*�/�x�c9/&��/��k�,���(��k�/ey`#x�b��#xह�.��fy�!��&x� �y`#ybl��8�k��!�*�."�� z)���h��e��i�࠹�*�..��j�b*y���c9a���⭹�b�� �y`#ybcyo�8�c9bl�k�x�k���k�x� ��
+����J���":!�m�z,���+9b*y�����"H8�#9�*�..��b��zh$8�b��h��g��b�a�xस�jx�8�h8�dyb�y���8�c�h���8�f��g��b��#x� �8�'L	y.�y."��`����jXJ����K�jZ�8�y��Z�8.���8N8�8�{X�YknX��x�~8Έ��8N8"������z�[{�8~i��j�Nx�r���8�KɮzK�8�8~yJ>8�8n88X	��y8~8�8�8��z�X�n8~8�G����合」。 | 40%以上で財務安定の目安。高いほど倒産リスクが低い。 |
 | **EPS**（1株当たり利益） | 「株1枚あたり、会社がいくら稼いだか」。 | 右肩上がりなら業績が伸びている証拠。配当の源泉になる数字。 |
 | **DOE**（株主資本配当率） | 「株主の資産に対して、配当をどれくらい払っているか」。 | 3%以上を目標とする企業が多い。DOE基準の配当方針は株価に関係なく安定しやすい。 |
 """)
